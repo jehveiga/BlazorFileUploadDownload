@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using CsvHelper.Configuration.Attributes;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BlazorFileUploadDownload.Domain.Entities
@@ -7,12 +8,15 @@ namespace BlazorFileUploadDownload.Domain.Entities
     {
         [Key]
         [Column("id")]
+        [Ignore]
         public int Id { get; set; }
 
         [Column("nome")]
+        [Name("Nome do Produto")]
         public string? Nome { get; set; }
 
         [Column("preco", TypeName = "decimal(7, 2)")]
+        [Name("Preco do Produto")]
         public decimal Preco { get; set; }
     }
 }

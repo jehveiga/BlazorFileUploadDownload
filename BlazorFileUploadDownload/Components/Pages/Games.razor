@@ -1,0 +1,131 @@
+﻿@page "/games"
+@using BlazorFileUploadDownload.Data
+@using BlazorFileUploadDownload.Domain.Entities
+@using CsvHelper
+@using CsvHelper.Configuration
+@using Microsoft.EntityFrameworkCore
+@using System.Globalization
+@* @rendermode InteractiveServer *@
+@inject ApplicationDbContext appDbContext
+@inject IJSRuntime jsRuntime
+
+<PageTitle>Produtos</PageTitle>
+
+<div class="card mb-2">
+    <div class="card-body d-flex flex-row">
+        <span class="flex-fill fw-bolder text-end p-1">Upload CSV</span>
+        <InputFile class="form-control form-control-sm w-25" OnChange="HandleFileUpload"></InputFile>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="card-header d-flex flex-row">
+            <span class="flex-fill fw-bolder">Games</span>
+
+            <button type="button" class="btn btn-sm btn-primary" @onclick="DownloadGames">
+                <i class="bi bi-download me-1"></i>
+                Download
+            </button>
+        </div>
+        <table class="table table-striped mb-0">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Codigo</th>
+                    <th>Nome</th>
+                    <th>Preço</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (games is null)
+                {
+                    <tr>
+                        <td class="text-center" colspan="4">
+                            Loading...
+                        </td>
+                    </tr>
+                }
+                else if (!games.Any())
+                {
+                    <tr>
+                        <td class="text-center" colspan="4">
+                            Não tem produtos adicionados
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var game in games)
+                    {
+                        <tr>
+                            <td>@game.Id </td>
+                            <td>@game.Nome </td>
+                            <td>@game.Preco.ToString("F2") </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+@code {
+    IEnumerable<Game> games = Enumerable.Empty<Game>();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if (firstRender)
+        {
+            await LoadGames();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        if(e.File is not null)
+        {
+            var file = e.File;
+
+            // Se o arquivo de upload não for obrigatorio na primeira linha do Header (HasHeaderRecord = false)
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true};
+            using (var reader = new StreamReader(file.OpenReadStream(maxAllowedSize: 2097152)))
+            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+            {
+                // Transforma os dados lidos na planilha em uma lista de objetos
+                var games = csv.GetRecords<Game>().ToList();
+                await appDbContext.Games.AddRangeAsync(games);
+                await appDbContext.SaveChangesAsync();
+                await LoadGames();
+                await jsRuntime.InvokeVoidAsync("alert", "Games adicionados com sucesso!");
+            }
+        }
+    }
+
+    public async Task LoadGames()
+    {
+        games = await appDbContext.Games.ToListAsync();
+    }
+
+    private async Task DownloadGames()
+    {
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true };
+        using (var memoryStream = new MemoryStream())
+        using (TextWriter textWriter = new StreamWriter(memoryStream))
+        using (var csvWrite = new CsvWriter(textWriter, config))
+        {
+            csvWrite.WriteRecords(games);
+
+            textWriter.Flush();
+            memoryStream.Seek(0, SeekOrigin.Begin);
+            using var streamRef = new DotNetStreamReference(memoryStream);
+
+            // Função criada em JavaScript que será chamada para efetuar o download da planilha com os dados passados no parametro
+            await jsRuntime.InvokeVoidAsync("downloadFileFromStream", "games.csv", streamRef);
+        }
+    }
+}
