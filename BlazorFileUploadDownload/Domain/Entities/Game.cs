@@ -12,11 +12,9 @@ namespace BlazorFileUploadDownload.Domain.Entities
         public int Id { get; set; }
 
         [Column("nome")]
-        [Name("Nome do Produto")]
         public string? Nome { get; set; }
 
         [Column("preco", TypeName = "decimal(7, 2)")]
-        [Name("Preco do Produto")]
         public decimal Preco { get; set; }
     }
 }

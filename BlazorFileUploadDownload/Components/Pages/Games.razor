@@ -1,11 +1,5 @@
 ﻿@page "/games"
-@using BlazorFileUploadDownload.Data
-@using BlazorFileUploadDownload.Domain.Entities
-@using CsvHelper
-@using CsvHelper.Configuration
-@using Microsoft.EntityFrameworkCore
-@using System.Globalization
-@* @rendermode InteractiveServer *@
+@rendermode @(new InteractiveServerRenderMode(prerender: true))
 @inject ApplicationDbContext appDbContext
 @inject IJSRuntime jsRuntime
 
@@ -21,7 +15,7 @@
 <div class="card">
     <div class="card-body p-0">
         <div class="card-header d-flex flex-row">
-            <span class="flex-fill fw-bolder">Games</span>
+            <span class="flex-fill fw-bolder text-center">Games</span>
 
             <button type="button" class="btn btn-sm btn-primary" @onclick="DownloadGames">
                 <i class="bi bi-download me-1"></i>
@@ -31,7 +25,6 @@
         <table class="table table-striped mb-0">
             <thead>
                 <tr>
-                    <th>#</th>
                     <th>Codigo</th>
                     <th>Nome</th>
                     <th>Preço</th>
@@ -72,6 +65,16 @@
 
 
 @code {
+
+    public class GameMap : ClassMap<Game>
+    {
+        public GameMap()
+        {
+            Map(m => m.Nome);
+            Map(m => m.Preco);
+        }
+    }
+
     IEnumerable<Game> games = Enumerable.Empty<Game>();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -91,13 +94,15 @@
         {
             var file = e.File;
 
-            // Se o arquivo de upload não for obrigatorio na primeira linha do Header (HasHeaderRecord = false)
+            // Se o arquivo de upload não tiver na primeira linha do Header cabecalho (HasHeaderRecord = false)
             var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true};
             using (var reader = new StreamReader(file.OpenReadStream(maxAllowedSize: 2097152)))
             using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
             {
+                csv.Context.RegisterClassMap<GameMap>();
+
                 // Transforma os dados lidos na planilha em uma lista de objetos
-                var games = csv.GetRecords<Game>().ToList();
+                var games = csv.GetRecords<Game>();
                 await appDbContext.Games.AddRangeAsync(games);
                 await appDbContext.SaveChangesAsync();
                 await LoadGames();
