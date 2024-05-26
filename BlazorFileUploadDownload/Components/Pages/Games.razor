@@ -1,13 +1,14 @@
 ﻿@page "/games"
-@rendermode @(new InteractiveServerRenderMode(prerender: true))
-@inject ApplicationDbContext appDbContext
+@using BlazorFileUploadDownload.Services
+@using System.Text
 @inject IJSRuntime jsRuntime
-
+@inject ApplicationDbContext appDbContext
+@rendermode @(new InteractiveServerRenderMode(prerender: true))
 <PageTitle>Produtos</PageTitle>
 
 <div class="card mb-2">
     <div class="card-body d-flex flex-row">
-        <span class="flex-fill fw-bolder text-end p-1">Upload CSV</span>
+        <span class="flex-fill fw-bolder text-end p-1 me-lg-3">Upload CSV</span>
         <InputFile class="form-control form-control-sm w-25" OnChange="HandleFileUpload"></InputFile>
     </div>
 </div>
@@ -90,23 +91,23 @@
 
     public async Task HandleFileUpload(InputFileChangeEventArgs e)
     {
-        if(e.File is not null)
+        if (e.File is not null)
         {
-            var file = e.File;
-
-            // Se o arquivo de upload não tiver na primeira linha do Header cabecalho (HasHeaderRecord = false)
-            var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true};
-            using (var reader = new StreamReader(file.OpenReadStream(maxAllowedSize: 2097152)))
-            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+            try
             {
-                csv.Context.RegisterClassMap<GameMap>();
+                var file = e.File;
 
-                // Transforma os dados lidos na planilha em uma lista de objetos
-                var games = csv.GetRecords<Game>();
+                var games = await CsvService.LerCsvAsync(file);
+
                 await appDbContext.Games.AddRangeAsync(games);
                 await appDbContext.SaveChangesAsync();
                 await LoadGames();
                 await jsRuntime.InvokeVoidAsync("alert", "Games adicionados com sucesso!");
+
+            }
+            catch (Exception ex)
+            {
+                await jsRuntime.InvokeVoidAsync("alert", ex.Message);
             }
         }
     }
@@ -118,19 +119,30 @@
 
     private async Task DownloadGames()
     {
-        var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true };
-        using (var memoryStream = new MemoryStream())
-        using (TextWriter textWriter = new StreamWriter(memoryStream))
-        using (var csvWrite = new CsvWriter(textWriter, config))
+        try
         {
-            csvWrite.WriteRecords(games);
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+                {
+                    HasHeaderRecord = true,
+                    Encoding = Encoding.UTF8
+                };
+            using (var memoryStream = new MemoryStream())
+            using (TextWriter textWriter = new StreamWriter(memoryStream))
+            using (var csvWrite = new CsvWriter(textWriter, config))
+            {
+                csvWrite.WriteRecords(games);
 
-            textWriter.Flush();
-            memoryStream.Seek(0, SeekOrigin.Begin);
-            using var streamRef = new DotNetStreamReference(memoryStream);
+                textWriter.Flush();
+                memoryStream.Seek(0, SeekOrigin.Begin);
+                using var streamRef = new DotNetStreamReference(memoryStream);
 
-            // Função criada em JavaScript que será chamada para efetuar o download da planilha com os dados passados no parametro
-            await jsRuntime.InvokeVoidAsync("downloadFileFromStream", "games.csv", streamRef);
+                // Função criada em JavaScript que será chamada para efetuar o download da planilha com os dados passados no parametro
+                await jsRuntime.InvokeVoidAsync("downloadFileFromStream", "games.csv", streamRef);
+            }
+        }
+        catch (Exception ex)
+        {
+            await jsRuntime.InvokeVoidAsync("alert", ex.Message);
         }
     }
 }
